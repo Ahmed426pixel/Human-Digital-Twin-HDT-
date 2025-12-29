@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Industry-Level Human Digital Twin</title>
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="css/style.css">
+    
+    <!-- CRITICAL: fflate library for FBX decompression - MUST LOAD FIRST -->
+    <script src="https://cdn.jsdelivr.net/npm/fflate@0.7.4/umd/index.js"></script>
+    
+    <!-- Three.js Core Library (r128) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Three.js Additional Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- Socket.IO for real-time communication -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <!-- ============================================ -->
+    <!-- LOADING SCREEN -->
+    <!-- ============================================ -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h2>Loading Digital Twin...</h2>
+            <p id="loading-status">Initializing...</p>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- MAIN APPLICATION CONTAINER -->
+    <!-- ============================================ -->
+    <div id="app" class="container" style="display: none;">
+        
+        <!-- ============================================ -->
+        <!-- HEADER -->
+        <!-- ============================================ -->
+        <header class="header">
+            <div class="header-left">
+                <h1>🤖 Human Digital Twin</h1>
+                <span id="user-info" class="user-badge"></span>
+            </div>
+            <div class="header-right">
+                <div class="status-indicator" id="connection-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Disconnected</span>
+                </div>
+                <button id="logout-btn" class="btn btn-secondary">Logout</button>
+            </div>
+        </header>
+
+        <!-- ============================================ -->
+        <!-- LOGIN / REGISTER PANEL -->
+        <!-- ============================================ -->
+        <div id="auth-panel" class="auth-panel">
+            <div class="auth-box">
+                <h2 id="auth-title">Login to Your Digital Twin</h2>
+                
+                <!-- Login Form -->
+                <div id="login-form" class="auth-form">
+                    <input 
+                        type="text" 
+                        id="login-username" 
+                        placeholder="Username" 
+                        class="input-field"
+                        autocomplete="username">
+                    <input 
+                        type="password" 
+                        id="login-password" 
+                        placeholder="Password" 
+                        class="input-field"
+                        autocomplete="current-password">
+                    <button id="login-submit" class="btn btn-primary">Login</button>
+                    <p class="auth-switch">
+                        Don't have an account? 
+                        <a href="#" id="show-register">Register</a>
+                    </p>
+                </div>
+
+                <!-- Register Form -->
+                <div id="register-form" class="auth-form" style="display: none;">
+                    <input 
+                        type="text" 
+                        id="register-username" 
+                        placeholder="Username" 
+                        class="input-field"
+                        autocomplete="username">
+                    <input 
+                        type="email" 
+                        id="register-email" 
+                        placeholder="Email" 
+                        class="input-field"
+                        autocomplete="email">
+                    <input 
+                        type="text" 
+                        id="register-fullname" 
+                        placeholder="Full Name" 
+                        class="input-field"
+                        autocomplete="name">
+                    <input 
+                        type="password" 
+                        id="register-password" 
+                        placeholder="Password" 
+                        class="input-field"
+                        autocomplete="new-password">
+                    <button id="register-submit" class="btn btn-primary">Register</button>
+                    <p class="auth-switch">
+                        Already have an account? 
+                        <a href="#" id="show-login">Login</a>
+                    </p>
+                </div>
+
+                <!-- Error Message Display -->
+                <div id="auth-error" class="error-message" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MAIN CONTENT (3-COLUMN LAYOUT) -->
+        <!-- ============================================ -->
+        <div id="main-content" class="main-content" style="display: none;">
+            
+            <!-- ============================================ -->
+            <!-- LEFT SIDEBAR - Profile & Controls -->
+            <!-- ============================================ -->
+            <aside class="sidebar sidebar-left">
+                
+                <!-- Profile Selection Panel -->
+                <div class="panel">
+                    <h3>👤 Select Role</h3>
+                    <div id="profile-selector" class="profile-selector">
+                        <button class="profile-btn" data-role="software_engineer">
+                            <span class="profile-icon">💻</span>
+                            <span class="profile-name">Software Engineer</span>
+                        </button>
+                        <button class="profile-btn" data-role="office_worker">
+                            <span class="profile-icon">📊</span>
+                            <span class="profile-name">Office Worker</span>
+                        </button>
+                        <button class="profile-btn" data-role="factory_worker">
+                            <span class="profile-icon">🏭</span>
+                            <span class="profile-name">Factory Worker</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Session Control Panel -->
+                <div class="panel">
+                    <h3>⚡ Session Control</h3>
+                    <button id="start-session-btn" class="btn btn-success btn-block">
+                        Start Session
+                    </button>
+                    <button id="end-session-btn" class="btn btn-danger btn-block" style="display: none;">
+                        End Session
+                    </button>
+                    <div id="session-info" class="session-info" style="display: none;">
+                        <p><strong>Duration:</strong> <span id="session-duration">00:00:00</span></p>
+                        <p><strong>Tasks:</strong> <span id="tasks-completed">0</span></p>
+                    </div>
+                </div>
+
+                <!-- Current State Monitoring Panel -->
+                <div class="panel">
+                    <h3>📊 Current State</h3>
+                    <div class="metrics">
+                        <!-- Stress Level -->
+                        <div class="metric">
+                            <span class="metric-label">Stress Level</span>
+                            <div class="metric-bar">
+                                <div id="stress-bar" class="metric-fill" style="width: 0%;"></div>
+                            </div>
+                            <span id="stress-value" class="metric-value">0%</span>
+                        </div>
+                        
+                        <!-- Cognitive Load -->
+                        <div class="metric">
+                            <span class="metric-label">Cognitive Load</span>
+                            <div class="metric-bar">
+                                <div id="cognitive-bar" class="metric-fill" style="width: 0%;"></div>
+                            </div>
+                            <span id="cognitive-value" class="metric-value">0%</span>
+                        </div>
+                        
+                        <!-- Fatigue Score -->
+                        <div class="metric">
+                            <span class="metric-label">Fatigue Score</span>
+                            <div class="metric-bar">
+                                <div id="fatigue-bar" class="metric-fill" style="width: 0%;"></div>
+                            </div>
+                            <span id="fatigue-value" class="metric-value">0%</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- ============================================ -->
+            <!-- CENTER - 3D Visualization -->
+            <!-- ============================================ -->
+            <main class="main-area">
+                <div class="panel panel-3d">
+                    <!-- Three.js Canvas Container -->
+                    <div id="threejs-container" class="threejs-container"></div>
+                    
+                    <!-- Avatar State Badge Overlay -->
+                    <div class="avatar-status">
+                        <div id="avatar-state" class="state-badge state-optimal">Optimal</div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- ============================================ -->
+            <!-- RIGHT SIDEBAR - AI Interaction -->
+            <!-- ============================================ -->
+            <aside class="sidebar sidebar-right">
+                
+                <!-- AI Chat Panel -->
+                <div class="panel chat-panel">
+                    <h3>💬 AI Assistant</h3>
+                    
+                    <!-- Chat Messages Container -->
+                    <div id="chat-messages" class="chat-messages">
+                        <!-- Chat messages will be dynamically added here -->
+                    </div>
+                    
+                    <!-- Chat Input Area -->
+                    <div class="chat-input-container">
+                        <textarea 
+                            id="chat-input" 
+                            class="chat-input" 
+                            placeholder="Type a command or ask a question..."
+                            rows="3"
+                        ></textarea>
+                        <button id="send-chat-btn" class="btn btn-primary btn-block">Send</button>
+                    </div>
+                </div>
+
+                <!-- Recent Tasks Panel -->
+                <div class="panel">
+                    <h3>📋 Recent Tasks</h3>
+                    <div id="task-list" class="task-list">
+                        <p class="empty-state">No tasks yet</p>
+                    </div>
+                </div>
+            </aside>
+
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- JAVASCRIPT FILES (Load Order Matters!) -->
+    <!-- ============================================ -->
+    
+    <!-- API Client - Handles all backend communication -->
+    <script src="js/api.js"></script>
+    
+    <!-- Scene Manager - Handles 3D visualization -->
+    <script src="js/scene.js"></script>
+    
+    <!-- UI Controller - Handles user interface interactions -->
+    <script src="js/ui.js"></script>
+    
+    <!-- Main Application - Initializes and coordinates everything -->
+    <script src="js/main.js"></script>
+
+    <!-- ============================================ -->
+    <!-- INITIALIZATION CHECK -->
+    <!-- ============================================ -->
+    <script>
+        // Verify all critical libraries are loaded
+        console.log('='.repeat(60));
+        console.log('🚀 LIBRARY CHECK');
+        console.log('='.repeat(60));
+        console.log('✓ fflate loaded:', typeof fflate !== 'undefined');
+        console.log('✓ THREE loaded:', typeof THREE !== 'undefined');
+        console.log('✓ THREE.FBXLoader available:', typeof THREE.FBXLoader !== 'undefined');
+        console.log('✓ THREE.GLTFLoader available:', typeof THREE.GLTFLoader !== 'undefined');
+        console.log('✓ THREE.OrbitControls available:', typeof THREE.OrbitControls !== 'undefined');
+        console.log('✓ Socket.IO loaded:', typeof io !== 'undefined');
+        console.log('='.repeat(60));
+        
+        // Check if any critical library failed to load
+        if (typeof THREE === 'undefined') {
+            alert('⚠️ THREE.js failed to load! Check your internet connection.');
+        }
+        if (typeof THREE.FBXLoader === 'undefined') {
+            console.error('❌ FBXLoader failed to load!');
+        }
+        if (typeof fflate === 'undefined') {
+            console.error('❌ fflate failed to load! FBX models will not work.');
+        }
+    </script>
+</body>
+</html>
